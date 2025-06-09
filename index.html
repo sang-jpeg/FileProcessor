@@ -1,0 +1,749 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Client File Processor</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- SheetJS (xlsx) library for reading Excel files -->
+    <script src="https://unpkg.com/xlsx/dist/xlsx.full.min.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6;
+            color: #333;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            min-height: 100vh;
+            padding: 2rem;
+            box-sizing: border-box;
+        }
+        .container {
+            background-color: #ffffff;
+            border-radius: 12px;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            padding: 2.5rem;
+            width: 100%;
+            max-width: 900px;
+            box-sizing: border-box;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+        .header h1 {
+            font-size: 2.25rem;
+            font-weight: 700;
+            color: #1a202c;
+            margin-bottom: 0.5rem;
+        }
+        .header p {
+            color: #6b7280;
+            font-size: 1rem;
+        }
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+        .form-group label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            color: #374151;
+        }
+        /* Specific style for Select Codebase dropdown alignment */
+        .form-group.horizontal-label label {
+            margin-bottom: 0; /* Remove default bottom margin */
+            flex-shrink: 0; /* Prevent label from shrinking */
+            line-height: 2.5rem; /* Align vertically with select for consistency */
+            margin-right: 1rem; /* Space between label and select */
+        }
+        .form-group input[type="file"],
+        .form-group select {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            font-size: 1rem;
+            background-color: #f9fafb;
+            color: #4b5563;
+            box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.05);
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        .form-group input[type="file"]:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: #6366f1;
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+        }
+        .cta-buttons {
+            display: flex;
+            gap: 1rem;
+            justify-content: flex-end;
+            margin-top: 2rem;
+        }
+        .cta-buttons button {
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.2s, transform 0.1s;
+        }
+        .cta-buttons button.primary {
+            background-color: #6366f1;
+            color: #ffffff;
+            border: none;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+        .cta-buttons button.primary:hover {
+            background-color: #4f46e5;
+            transform: translateY(-1px);
+        }
+        .cta-buttons button.secondary {
+            background-color: #e5e7eb;
+            color: #374151;
+            border: 1px solid #d1d5db;
+        }
+        .cta-buttons button.secondary:hover {
+            background-color: #d1d5db;
+            transform: translateY(-1px);
+        }
+        .processing-settings, .preview-section {
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin-top: 1.5rem;
+            background-color: #f9fafb;
+        }
+        .processing-settings h2, .preview-section h2 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: #1f2937;
+            margin-bottom: 1rem;
+        }
+        /* Preview Table Styles */
+        .preview-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 1rem;
+            font-size: 0.875rem; /* Slightly smaller font for table */
+            font-family: 'Inter', sans-serif; /* Ensure sans-serif font */
+        }
+        .preview-table th, .preview-table td {
+            border: 1px solid #e5e7eb; /* Full borders */
+            padding: 0.75rem 1rem;
+            text-align: left;
+            vertical-align: top;
+        }
+        .preview-table th {
+            background-color: #f3f4f6;
+            font-weight: 600;
+            color: #4b5563;
+            text-transform: uppercase;
+        }
+        /* Styles for truncated/expanded content within cells */
+        .truncated-content {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-height: 1.4em; /* Approx height of one line */
+            display: block;
+        }
+        .expanded-content {
+            white-space: pre-wrap; /* Preserve newlines and wrap text */
+            display: block;
+        }
+        .hidden-content {
+            display: none;
+        }
+        .always-visible-content {
+            white-space: normal; /* Allow normal wrapping for short content */
+            display: block;
+        }
+        
+        #messageBox {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background-color: #4CAF50; /* Green */
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            z-index: 1000;
+            display: none; /* Hidden by default */
+        }
+        #messageBox.error {
+            background-color: #f44336; /* Red */
+        }
+
+        /* Styles for the new file upload area */
+        .file-upload-area {
+            border: 2px dashed #d1d5db;
+            border-radius: 8px;
+            padding: 2rem;
+            text-align: center;
+            background-color: #f9fafb;
+            cursor: pointer;
+            transition: background-color 0.2s, border-color 0.2s;
+            position: relative; /* Needed for absolute positioning of child elements */
+            min-height: 120px; /* Ensure enough space for content */
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+        .file-upload-area.highlight {
+            background-color: #e0e7ff;
+            border-color: #6366f1;
+        }
+        .file-upload-area p {
+            color: #6b7280;
+            margin-top: 1rem;
+            font-size: 0.9rem;
+        }
+        .file-upload-area input[type="file"] {
+            display: none; /* Hide the default file input */
+        }
+        .file-upload-button {
+            background-color: #6b7280;
+            color: white;
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            display: inline-block;
+            margin-top: 0.5rem; /* Adjusted margin */
+            font-size: 1rem;
+        }
+        .file-upload-button:hover:not(:disabled) {
+            background-color: #4b5563;
+        }
+        .file-upload-button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        /* Selected file display inside the drop area */
+        .selected-file-display-inline {
+            display: flex;
+            align-items: center;
+            justify-content: space-between; /* Space between file name and cancel button */
+            gap: 0.75rem;
+            padding: 0.5rem 1rem; /* Smaller padding */
+            background-color: #e0e7ff; /* Light blue background */
+            border: 1px solid #a5b4fc;
+            border-radius: 6px; /* Smaller radius */
+            color: #3730a3; /* Darker blue text */
+            font-weight: 500;
+            font-size: 0.85rem; /* Smaller font size */
+            max-width: 80%; /* Limit width */
+            margin: 1rem auto 0; /* Center it */
+        }
+        .selected-file-display-inline .file-name {
+            flex-grow: 1;
+            text-align: left; /* Align text left */
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis; /* Add ellipsis for long names */
+        }
+        .selected-file-display-inline .cancel-button {
+            background: none;
+            border: none;
+            font-size: 1rem; /* Smaller font size for X */
+            color: #ef4444; /* Red for close button */
+            cursor: pointer;
+            padding: 0 0.25rem; /* Smaller padding */
+            line-height: 1;
+            transition: color 0.2s;
+        }
+        .selected-file-display-inline .cancel-button:hover {
+            color: #dc2626;
+        }
+
+        /* Scrollable preview container */
+        #previewTableContainer {
+            max-height: 400px; /* Set a max height for scrolling */
+            overflow-y: auto; /* Enable vertical scrolling */
+            border: 1px solid #e5e7eb; /* Optional: Add border to visualize scrollable area */
+            border-radius: 8px;
+            margin-top: 1rem;
+        }
+        /* Remove internal borders from table within the scroll container, as the cells themselves now have borders */
+        #previewTableContainer table {
+            margin-top: 0;
+            border: none; /* Remove border from table itself */
+        }
+        /* Row toggle button styles */
+        .row-toggle-button {
+            background-color: #a5b4fc; /* Light blue */
+            color: #3730a3; /* Darker blue */
+            padding: 0.4rem 0.8rem; /* Smaller padding */
+            border-radius: 6px;
+            font-weight: 500;
+            cursor: pointer;
+            border: none;
+            font-size: 0.8rem; /* Smaller font size */
+            white-space: nowrap;
+            transition: background-color 0.2s;
+        }
+        .row-toggle-button:hover {
+            background-color: #818cf8;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Client File Processor</h1>
+            <p>Upload your client Excel file and process it for import.</p>
+        </div>
+
+        <div class="form-group">
+            <h2 class="text-xl font-semibold text-gray-800 mb-4 text-center">Upload Excel File for Processing</h2>
+            <div id="dropArea" class="file-upload-area">
+                <input type="file" id="hiddenFileInput" accept=".xlsx">
+                <div id="initialUploadState">
+                    <button id="chooseFileButton" class="file-upload-button">Choose File</button>
+                    <p>or drag and drop your file here</p>
+                </div>
+                <div id="selectedFileContainer" class="selected-file-display-inline hidden">
+                    <span class="file-name" id="selectedFileName"></span>
+                    <button id="cancelFileButton" class="cancel-button">&times;</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="form-group horizontal-label flex items-center">
+            <label for="codebaseSelect" class="w-auto">Select Codebase:</label>
+            <select id="codebaseSelect" class="rounded-lg flex-grow" disabled>
+                <option value="">-- Please select --</option>
+                <option value="xTV">xTV Pack</option>
+                <!-- Other codebases can be added here -->
+            </select>
+        </div>
+
+        <div id="processingSettings" class="processing-settings hidden">
+            <h2>xTV Processing Settings</h2>
+            <p class="text-sm text-gray-600 mb-4">
+                These settings will apply specific processing rules for xTV packs.
+            </p>
+            <p class="text-sm text-gray-700">
+                This process will parse column 'Step Summary' into 'Preconditions', 'Steps', and 'Expected Results' based on Gherkin keywords. Rows containing "Execute exploratory testing on ..." will have their content moved directly to the 'Steps' column.
+            </p>
+        </div>
+
+        <div id="previewSection" class="preview-section hidden">
+            <div class="flex justify-between items-center mb-4">
+                <h2>Preview Changes</h2>
+                <div class="flex items-center gap-4">
+                    <span id="previewRowCount" class="text-sm text-gray-600"></span>
+                    <button id="toggleAllBtn" class="secondary px-4 py-2 text-sm rounded-md shadow-sm">Expand All</button>
+                </div>
+            </div>
+            <div id="previewTableContainer">
+                <!-- Preview table will be dynamically inserted here -->
+            </div>
+        </div>
+
+        <div class="cta-buttons hidden"> <!-- Added 'hidden' class here -->
+            <button id="processAnotherBtn" class="secondary">Process another file</button>
+            <button id="downloadBtn" class="primary" disabled>Download processed file</button>
+        </div>
+    </div>
+
+    <div id="messageBox"></div>
+
+    <script>
+        // Global variables provided by the Canvas environment
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+
+        // Helper function to show messages
+        function showMessage(message, isError = false) {
+            const messageBox = document.getElementById('messageBox');
+            messageBox.textContent = message;
+            messageBox.className = 'message-box'; // Reset classes
+            if (isError) {
+                messageBox.classList.add('error');
+            }
+            messageBox.style.display = 'block';
+            setTimeout(() => {
+                messageBox.style.display = 'none';
+            }, 3000); // Hide after 3 seconds
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const hiddenFileInput = document.getElementById('hiddenFileInput');
+            const chooseFileButton = document.getElementById('chooseFileButton');
+            const dropArea = document.getElementById('dropArea');
+            const initialUploadState = document.getElementById('initialUploadState');
+            const selectedFileContainer = document.getElementById('selectedFileContainer');
+            const selectedFileNameSpan = document.getElementById('selectedFileName');
+            const cancelFileButton = document.getElementById('cancelFileButton');
+            const codebaseSelect = document.getElementById('codebaseSelect');
+            const processingSettings = document.getElementById('processingSettings');
+            const previewSection = document.getElementById('previewSection');
+            const previewTableContainer = document.getElementById('previewTableContainer');
+            const downloadBtn = document.getElementById('downloadBtn');
+            const processAnotherBtn = document.getElementById('processAnotherBtn');
+            const toggleAllBtn = document.getElementById('toggleAllBtn');
+            const previewRowCountSpan = document.getElementById('previewRowCount');
+            const ctaButtonsContainer = document.querySelector('.cta-buttons'); // Get the CTA buttons container
+
+            let processedData = [];
+            let processedHeaders = [];
+            let uploadedFile = null;
+
+            codebaseSelect.disabled = true;
+
+            // --- File Upload UI Management ---
+            chooseFileButton.addEventListener('click', () => {
+                hiddenFileInput.click();
+            });
+
+            function handleFileSelection(file) {
+                if (file) {
+                    uploadedFile = file;
+                    selectedFileNameSpan.textContent = file.name;
+                    initialUploadState.classList.add('hidden');
+                    selectedFileContainer.classList.remove('hidden');
+                    dropArea.style.cursor = 'default';
+                    codebaseSelect.disabled = false;
+                    codebaseSelect.value = '';
+                    resetProcessingUI(); // This will now also hide CTA buttons
+                    showMessage('File selected. Please select a codebase to proceed.');
+                }
+            }
+
+            hiddenFileInput.addEventListener('change', (event) => {
+                handleFileSelection(event.target.files[0]);
+            });
+
+            dropArea.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                dropArea.classList.add('highlight');
+            });
+
+            dropArea.addEventListener('dragleave', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                dropArea.classList.remove('highlight');
+            });
+
+            dropArea.addEventListener('drop', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                dropArea.classList.remove('highlight');
+                if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                    handleFileSelection(e.dataTransfer.files[0]);
+                }
+            });
+
+            cancelFileButton.addEventListener('click', (e) => {
+                e.stopPropagation();
+                uploadedFile = null;
+                hiddenFileInput.value = '';
+                selectedFileContainer.classList.add('hidden');
+                initialUploadState.classList.remove('hidden');
+                selectedFileNameSpan.textContent = '';
+                dropArea.style.cursor = 'pointer';
+                codebaseSelect.disabled = true;
+                codebaseSelect.value = '';
+                resetProcessingUI(); // This will now also hide CTA buttons
+                showMessage('File selection cancelled. Please upload a new file.');
+            });
+
+            function resetProcessingUI() {
+                processingSettings.classList.add('hidden');
+                previewSection.classList.add('hidden');
+                downloadBtn.disabled = true;
+                processedData = [];
+                processedHeaders = [];
+                previewTableContainer.innerHTML = '';
+                previewRowCountSpan.textContent = '';
+                ctaButtonsContainer.classList.add('hidden'); // Hide CTA buttons on reset
+            }
+
+            // --- Existing Processing Logic ---
+            codebaseSelect.addEventListener('change', () => {
+                const selectedCodebase = codebaseSelect.value;
+                if (selectedCodebase === 'xTV' && uploadedFile) {
+                    processingSettings.classList.remove('hidden');
+                    processFile(uploadedFile);
+                } else {
+                    resetProcessingUI(); // Hide CTA buttons if codebase is invalid or no file
+                    if (selectedCodebase !== 'xTV' && selectedCodebase !== '') {
+                        showMessage('Please select a valid codebase to proceed.', true);
+                    } else if (!uploadedFile) {
+                        showMessage('Please upload a file first.', true);
+                    }
+                }
+            });
+
+            function processFile(file) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const data = new Uint8Array(e.target.result);
+                    try {
+                        const workbook = XLSX.read(data, { type: 'array' });
+                        const sheetName = workbook.SheetNames[0];
+                        const worksheet = workbook.Sheets[sheetName];
+                        const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, raw: false, defval: "" });
+
+                        if (jsonData.length === 0) {
+                            showMessage('The uploaded Excel file is empty or has no data in the first sheet.', true);
+                            resetProcessingUI();
+                            return;
+                        }
+
+                        const headers = jsonData[0].map(h => String(h).trim());
+                        const rows = jsonData.slice(1);
+
+                        parseAndProcessExcelData(headers, rows);
+                    } catch (error) {
+                        showMessage(`Error parsing Excel file: ${error.message}`, true);
+                        console.error("Error parsing Excel file:", error);
+                        resetProcessingUI();
+                    }
+                };
+                reader.onerror = () => {
+                    showMessage('Error reading file.', true);
+                    resetProcessingUI();
+                };
+                reader.readAsArrayBuffer(file);
+            }
+
+            function parseAndProcessExcelData(originalHeaders, dataRows) {
+                const stepSummaryColName = 'Step Summary';
+                const stepSummaryColIndex = originalHeaders.findIndex(header => header.toLowerCase() === stepSummaryColName.toLowerCase());
+
+                if (stepSummaryColIndex === -1) {
+                    showMessage(`Column "${stepSummaryColName}" not found in the file. Please ensure the column name is correct.`, true);
+                    resetProcessingUI();
+                    return;
+                }
+
+                processedHeaders = originalHeaders.filter((_, index) => index !== stepSummaryColIndex);
+                const testCaseNameIndex = processedHeaders.findIndex(header => header.toLowerCase() === 'test case name');
+                if (testCaseNameIndex !== -1) {
+                    processedHeaders.splice(testCaseNameIndex + 1, 0, 'Preconditions', 'Steps', 'Expected Results');
+                } else {
+                    processedHeaders.push('Preconditions', 'Steps', 'Expected Results');
+                }
+                // Add the new 'Toggle' header for the row expand/collapse button
+                processedHeaders.push('Toggle');
+
+                processedData = dataRows.map(rowArray => {
+                    const newRowData = {};
+
+                    originalHeaders.forEach((header, index) => {
+                        if (index !== stepSummaryColIndex) {
+                            newRowData[header.trim()] = String(rowArray[index] || '');
+                        }
+                    });
+
+                    const stepSummaryContent = String(rowArray[stepSummaryColIndex] || '');
+                    let preconditions = '';
+                    let steps = '';
+                    let expectedResults = '';
+
+                    if (stepSummaryContent.includes("Execute exploratory testing on ...")) {
+                        steps = stepSummaryContent;
+                    } else {
+                        const gherkinLines = stepSummaryContent.split(/\r?\n/).map(line => String(line).trim()).filter(line => line !== '');
+                        let currentSection = '';
+
+                        gherkinLines.forEach(line => {
+                            const lowerCaseLine = line.toLowerCase();
+                            if (lowerCaseLine.startsWith('given')) {
+                                currentSection = 'preconditions';
+                            } else if (lowerCaseLine.startsWith('when')) {
+                                currentSection = 'steps';
+                            } else if (lowerCaseLine.startsWith('then')) {
+                                currentSection = 'expectedResults';
+                            } else if (!currentSection) {
+                                currentSection = 'steps'; // Default to steps if no keyword is found at the start
+                            }
+
+                            if (currentSection === 'preconditions') {
+                                preconditions += (preconditions ? '\n' : '') + line;
+                            } else if (currentSection === 'steps') {
+                                steps += (steps ? '\n' : '') + line;
+                            } else if (currentSection === 'expectedResults') {
+                                expectedResults += (expectedResults ? '\n' : '') + line;
+                            }
+                        });
+                    }
+
+                    newRowData['Preconditions'] = preconditions;
+                    newRowData['Steps'] = steps;
+                    newRowData['Expected Results'] = expectedResults;
+
+                    return newRowData;
+                });
+
+                renderPreview(processedData, processedHeaders);
+                downloadBtn.disabled = false;
+                previewSection.classList.remove('hidden');
+                ctaButtonsContainer.classList.remove('hidden'); // Show CTA buttons here
+                showMessage('File processed successfully! Preview available.');
+            }
+
+            // Function to render the preview table
+            function renderPreview(data, headers) {
+                let tableHtml = `<table class="preview-table w-full"><thead><tr>`;
+                headers.forEach(header => {
+                    tableHtml += `<th>${header}</th>`;
+                });
+                tableHtml += `</tr></thead><tbody>`;
+
+                const previewRows = data.slice(0, 5); // Display only the first 5 rows for preview
+                const contentToggleHeaders = ['Preconditions', 'Steps', 'Expected Results'];
+
+                previewRows.forEach((rowData, rowIndex) => {
+                    const rowId = `preview-row-${rowIndex}`;
+                    tableHtml += `<tr id="${rowId}">`;
+                    headers.forEach(header => {
+                        const content = rowData[header] || '';
+                        const isLargeContent = content.includes('\n') || content.length > 50;
+
+                        if (contentToggleHeaders.includes(header)) {
+                            if (isLargeContent) {
+                                // For large content, provide both truncated and expanded views
+                                const firstLine = content.split(/\r?\n/)[0];
+                                tableHtml += `<td>
+                                    <span class="truncated-content" data-expandable="true">${firstLine || 'Click to expand'}</span>
+                                    <span class="expanded-content hidden" data-expandable="true">${content}</span>
+                                </td>`;
+                            } else {
+                                // For small content, always display fully
+                                tableHtml += `<td><span class="always-visible-content">${content}</span></td>`;
+                            }
+                        } else if (header === 'Toggle') {
+                            // This is the new toggle column for the row
+                            tableHtml += `<td><button class="row-toggle-button" data-row-id="${rowId}">Expand Row</button></td>`;
+                        } else {
+                            // Other columns display content directly
+                            tableHtml += `<td>${content}</td>`;
+                        }
+                    });
+                    tableHtml += `</tr>`;
+                });
+                tableHtml += `</tbody></table>`;
+                previewTableContainer.innerHTML = tableHtml;
+
+                // Add event listeners for row toggle buttons after rendering
+                const rowToggleButtons = previewTableContainer.querySelectorAll('.row-toggle-button');
+                rowToggleButtons.forEach(button => {
+                    button.addEventListener('click', (e) => {
+                        const rowId = e.target.dataset.rowId;
+                        const row = document.getElementById(rowId);
+                        if (row) {
+                            // Find only the expandable content spans within this row
+                            const truncatedSpans = row.querySelectorAll('.truncated-content[data-expandable="true"]');
+                            const expandedSpans = row.querySelectorAll('.expanded-content[data-expandable="true"]');
+                            
+                            // Determine if this row's expandable content is currently expanded
+                            let isExpanded = false;
+                            if (expandedSpans.length > 0 && !expandedSpans[0].classList.contains('hidden')) {
+                                isExpanded = true;
+                            }
+
+                            // Toggle visibility
+                            truncatedSpans.forEach(span => span.classList.toggle('hidden', !isExpanded));
+                            expandedSpans.forEach(span => span.classList.toggle('hidden', isExpanded));
+
+                            e.target.textContent = isExpanded ? 'Expand Row' : 'Collapse Row';
+                        }
+                    });
+                });
+
+                // Update row count display
+                previewRowCountSpan.textContent = `Showing ${Math.min(5, data.length)} of ${data.length} rows`;
+            }
+
+            // Toggle all details elements (now affecting content visibility)
+            toggleAllBtn.addEventListener('click', () => {
+                const allTruncatedSpans = previewTableContainer.querySelectorAll('.truncated-content[data-expandable="true"]');
+                const allExpandedSpans = previewTableContainer.querySelectorAll('.expanded-content[data-expandable="true"]');
+                const allToggleButtons = previewTableContainer.querySelectorAll('.row-toggle-button');
+
+                // Determine if all are currently expanded
+                let allAreExpanded = true;
+                if (allExpandedSpans.length > 0) {
+                    allAreExpanded = Array.from(allExpandedSpans).every(span => !span.classList.contains('hidden'));
+                } else { // If no expandable content, consider them collapsed
+                    allAreExpanded = false;
+                }
+
+                allTruncatedSpans.forEach(span => span.classList.toggle('hidden', !allAreExpanded));
+                allExpandedSpans.forEach(span => span.classList.toggle('hidden', allAreExpanded));
+
+                allToggleButtons.forEach(button => {
+                    button.textContent = allAreExpanded ? 'Expand Row' : 'Collapse Row';
+                });
+
+                toggleAllBtn.textContent = allAreExpanded ? 'Expand All' : 'Collapse All';
+            });
+
+            // Function to download the processed CSV file
+            downloadBtn.addEventListener('click', () => {
+                if (processedData.length === 0) {
+                    showMessage('No data to download. Please process a file first.', true);
+                    return;
+                }
+
+                let csv = processedHeaders.map(h => {
+                    // Exclude the 'Toggle' header from the downloaded CSV
+                    if (h === 'Toggle') return '';
+                    return `"${String(h).replace(/"/g, '""')}"`;
+                }).filter(h => h !== '').join(',') + '\n';
+
+                processedData.forEach(row => {
+                    const rowValues = processedHeaders.map(header => {
+                        // Exclude the 'Toggle' column's value from the downloaded CSV
+                        if (header === 'Toggle') return '';
+                        const value = String(row[header] || '');
+                        return `"${value.replace(/"/g, '""')}"`;
+                    }).filter(v => v !== ''); // Filter out empty strings from the 'Toggle' column
+                    csv += rowValues.join(',') + '\n';
+                });
+
+                const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                const link = document.createElement('a');
+                if (link.download !== undefined) {
+                    const url = URL.createObjectURL(blob);
+                    link.setAttribute('href', url);
+                    link.setAttribute('download', 'processed_xtv_pack.csv');
+                    link.style.visibility = 'hidden';
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    showMessage('Processed file downloaded!');
+                } else {
+                    showMessage('Your browser does not support downloading files directly. Please copy the content manually.', true);
+                }
+            });
+
+            // Function to reset the application for another file
+            processAnotherBtn.addEventListener('click', () => {
+                uploadedFile = null;
+                hiddenFileInput.value = '';
+                selectedFileContainer.classList.add('hidden');
+                initialUploadState.classList.remove('hidden');
+                selectedFileNameSpan.textContent = '';
+                dropArea.style.cursor = 'pointer';
+
+                codebaseSelect.value = '';
+                codebaseSelect.disabled = true;
+                resetProcessingUI(); // This will now also hide CTA buttons
+                showMessage('Ready to process another file!');
+            });
+        });
+    </script>
+</body>
+</html>
